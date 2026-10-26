@@ -1,13 +1,15 @@
 """SQLAlchemy persistence adapter for OAuth device tokens and sessions."""
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import Row, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from constants.oauth_bearer import TOKEN_CACHE_KEY_FMT
 from extensions.ext_redis import RedisClientWrapper
+from models.account import Account
 from models.oauth import OAuthAccessToken
 from services.oauth_device_contracts import (
     OAuthDeviceSession,
@@ -20,14 +22,26 @@ logger = logging.getLogger(__name__)
 
 
 class SQLAlchemyOAuthDeviceTokenRepository:
-    def __init__(self, *, session_factory: sessionmaker[Session], redis: RedisClientWrapper) -> None:
+    def __init__(
+        self,
+        *,
+        session_factory: sessionmaker[Session],
+        redis: RedisClientWrapper,
+        max_sessions_per_account: int,
+    ) -> None:
         self._session_factory = session_factory
         self._redis = redis
+        self._max_sessions_per_account = max_sessions_per_account
 
     def rotate_token(self, token: OAuthDeviceTokenWrite) -> OAuthDeviceTokenRotation:
-        old_hash: str | None = None
-        replaced_token_id: str | None = None
+        now = datetime.now(UTC)
+        evicted: Sequence[Row[tuple[str, str | None]]] = ()
         with self._session_factory() as session:
+            if token.account_id is not None:
+                # Row locks on token rows cannot stop a concurrent insert, so the
+                # account row serializes this account's logins for the cap check.
+                session.execute(select(Account.id).where(Account.id == token.account_id).with_for_update())
+
             prior = session.execute(
                 select(OAuthAccessToken.id, OAuthAccessToken.token_hash)
                 .where(
@@ -41,11 +55,10 @@ class SQLAlchemyOAuthDeviceTokenRepository:
                 .with_for_update()
             ).first()
             if prior is not None:
-                old_hash = prior.token_hash
-                replaced_token_id = str(prior.id)
-                session.execute(
-                    update(OAuthAccessToken).where(OAuthAccessToken.id == prior.id).values(revoked_at=datetime.now(UTC))
-                )
+                session.execute(update(OAuthAccessToken).where(OAuthAccessToken.id == prior.id).values(revoked_at=now))
+
+            if token.account_id is not None:
+                evicted = self._evict_over_cap(session, account_id=token.account_id, now=now)
 
             record = OAuthAccessToken(
                 subject_email=token.subject_email,
@@ -64,16 +77,53 @@ class SQLAlchemyOAuthDeviceTokenRepository:
 
         rotation = OAuthDeviceTokenRotation(
             token_id=token_id,
-            replaced_token_id=replaced_token_id,
-            replaced_token_hash=old_hash,
+            replaced_token_id=str(prior.id) if prior is not None else None,
+            replaced_token_hash=prior.token_hash if prior is not None else None,
+            evicted_token_ids=tuple(str(row.id) for row in evicted),
+            evicted_token_hashes=tuple(row.token_hash for row in evicted if row.token_hash),
         )
-        if old_hash:
+        cache_keys = [
+            TOKEN_CACHE_KEY_FMT.format(hash=token_hash)
+            for token_hash in (rotation.replaced_token_hash, *rotation.evicted_token_hashes)
+            if token_hash
+        ]
+        if cache_keys:
             try:
-                self._redis.delete(TOKEN_CACHE_KEY_FMT.format(hash=old_hash))
+                self._redis.delete(*cache_keys)
             except Exception:
                 self.rollback_rotation(rotation)
                 raise
         return rotation
+
+    def _evict_over_cap(
+        self,
+        session: Session,
+        *,
+        account_id: str,
+        now: datetime,
+    ) -> Sequence[Row[tuple[str, str | None]]]:
+        live = session.execute(
+            select(OAuthAccessToken.id, OAuthAccessToken.token_hash)
+            .where(
+                OAuthAccessToken.account_id == account_id,
+                OAuthAccessToken.revoked_at.is_(None),
+                OAuthAccessToken.expires_at > now,
+            )
+            .order_by(
+                func.coalesce(OAuthAccessToken.last_used_at, OAuthAccessToken.created_at).asc(),
+                OAuthAccessToken.id.asc(),
+            )
+        ).all()
+        # The row about to be inserted takes one of the slots.
+        overflow = len(live) + 1 - self._max_sessions_per_account
+        if overflow <= 0:
+            return ()
+
+        evicted = live[:overflow]
+        session.execute(
+            update(OAuthAccessToken).where(OAuthAccessToken.id.in_([row.id for row in evicted])).values(revoked_at=now)
+        )
+        return evicted
 
     def rollback_rotation(self, rotation: OAuthDeviceTokenRotation) -> bool:
         new_hash: str | None = None
@@ -106,11 +156,22 @@ class SQLAlchemyOAuthDeviceTokenRepository:
                 if predecessor is None:
                     raise RuntimeError("OAuth token rotation predecessor could not be restored")
                 predecessor.revoked_at = None
+            if rotation.evicted_token_ids:
+                # A row whose hash was cleared was revoked by the user since; keep it revoked.
+                session.execute(
+                    update(OAuthAccessToken)
+                    .where(
+                        OAuthAccessToken.id.in_(rotation.evicted_token_ids),
+                        OAuthAccessToken.revoked_at.is_not(None),
+                        OAuthAccessToken.token_hash.is_not(None),
+                    )
+                    .values(revoked_at=None)
+                )
             session.commit()
 
         cache_keys = [
             TOKEN_CACHE_KEY_FMT.format(hash=token_hash)
-            for token_hash in (new_hash, rotation.replaced_token_hash)
+            for token_hash in (new_hash, rotation.replaced_token_hash, *rotation.evicted_token_hashes)
             if token_hash
         ]
         if cache_keys:
