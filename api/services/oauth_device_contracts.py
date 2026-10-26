@@ -211,6 +211,10 @@ class AccessDeniedError(OAuthDeviceError):
     pass
 
 
+class ClientMismatchError(OAuthDeviceError):
+    pass
+
+
 class ExpiredOrUnknownError(OAuthDeviceError):
     pass
 
