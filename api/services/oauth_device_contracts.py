@@ -1,5 +1,6 @@
 """Framework-neutral contracts shared by the OAuth device-flow use cases."""
 
+import secrets
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -11,6 +12,13 @@ DEFAULT_POLL_INTERVAL_SECONDS = 5
 # PostgreSQL partial unique indexes treat NULLs as distinct. Account tokens use
 # a non-null issuer so the active-token uniqueness key remains stable.
 ACCOUNT_ISSUER_SENTINEL = "dify:account"
+
+DEVICE_LABEL_MAX_LENGTH = 255
+DEFAULT_LABEL_SUFFIX_BYTES = 3
+
+
+def default_device_label(client_name: str) -> str:
+    return f"{client_name} ({secrets.token_hex(DEFAULT_LABEL_SUFFIX_BYTES)})"[:DEVICE_LABEL_MAX_LENGTH]
 
 
 class DeviceFlowStatus(StrEnum):
@@ -49,6 +57,7 @@ class DeviceAuthorization:
     device_code: str
     user_code: str
     verification_uri: str
+    verification_uri_complete: str
     expires_in: int
     interval: int
 
