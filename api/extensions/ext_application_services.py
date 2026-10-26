@@ -74,6 +74,7 @@ from repositories.installation_state_repository import InstallationStateReposito
 from repositories.message_file_preview_repository import MessageFilePreviewQueryRepository
 from repositories.message_repository import MessageRepository
 from repositories.network_access_group_repository import SQLAlchemyNetworkAccessGroupAppRepository
+from repositories.oauth_client_repository import SQLAlchemyOAuthClientRepository
 from repositories.oauth_device_token_repository import SQLAlchemyOAuthDeviceTokenRepository
 from repositories.oauth_server_repository import RedisOAuthServerTokenRepository, SQLAlchemyOAuthServerRepository
 from repositories.plugin_file_upload_repository import SQLAlchemyPluginFileUploadOwnerRepository
@@ -158,6 +159,7 @@ from services.network_access_group_gateway import (
 from services.network_access_group_service import NetworkAccessGroupService
 from services.notification_gateway import BillingNotificationGateway
 from services.notification_service import NotificationService
+from services.oauth_clients import OAuthClientRegistry
 from services.oauth_device_adapters import (
     DifyConfigOAuthDeviceSettings,
     EnterpriseOAuthDeviceSSOGateway,
@@ -311,6 +313,7 @@ class ApplicationServices:
     upload_file_delivery: UploadFileDeliveryService
     oauth_server: OAuthServerService
     oauth_device: OAuthDeviceApplicationService
+    oauth_clients: OAuthClientRegistry
     init_validation: InitValidationService
     installed_apps: InstalledAppServices
     notifications: NotificationService
@@ -698,6 +701,7 @@ def build_application_services(
             accounts=accounts,
             workspaces=workspace_repository,
         ),
+        oauth_clients=OAuthClientRegistry(sources=[SQLAlchemyOAuthClientRepository(session_factory=database_client)]),
         init_validation=InitValidationService(
             state=installation_state,
             validation_required=(deployment_edition != DeploymentEdition.CLOUD and bool(initialization_password)),
