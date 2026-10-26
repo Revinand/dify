@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import create_autospec, patch
 
 import pytest
@@ -202,8 +202,9 @@ class FakeTokens:
         workspace_id: str,
         client_id: str,
         device_label: str,
+        lifetime: timedelta | None = None,
     ) -> IssuedOAuthToken:
-        _ = (account, workspace_id, client_id, device_label)
+        _ = (account, workspace_id, client_id, device_label, lifetime)
         self.account_issues += 1
         return self.account_token
 
