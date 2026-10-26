@@ -1409,6 +1409,13 @@ export const zNodeTypeListResponse = z.object({
 })
 
 /**
+ * OAuthTokenErrorResponse
+ */
+export const zOAuthTokenErrorResponse = z.object({
+  error: z.string(),
+})
+
+/**
  * OpenApiErrorCode
  */
 export const zOpenApiErrorCode = z.enum([
@@ -2401,6 +2408,23 @@ export const zDeviceTokenResponse = z.object({
 })
 
 /**
+ * OAuthTokenResponse
+ */
+export const zOAuthTokenResponse = z.object({
+  access_token: z.string(),
+  account: zAccountPayload.nullish(),
+  default_workspace_id: z.string().nullish(),
+  expires_in: z.int(),
+  refresh_token: z.string().nullish(),
+  subject_email: z.string().nullish(),
+  subject_issuer: z.string().nullish(),
+  subject_type: zSubjectType,
+  token_id: z.string(),
+  token_type: z.string(),
+  workspaces: z.array(zWorkspacePayload).optional().default([]),
+})
+
+/**
  * WorkspaceSummaryResponse
  */
 export const zWorkspaceSummaryResponse = z.object({
@@ -3165,6 +3189,11 @@ export const zPostOauthDeviceTokenBody = zDevicePollRequest
  * Device token
  */
 export const zPostOauthDeviceTokenResponse = zDeviceTokenResponse
+
+/**
+ * Access token
+ */
+export const zPostOauthTokenResponse = zOAuthTokenResponse
 
 export const zGetPermittedExternalAppsQuery = z.object({
   limit: z.int().gte(1).lte(100).optional().default(20),
