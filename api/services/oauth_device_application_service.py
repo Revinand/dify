@@ -57,6 +57,7 @@ from services.oauth_device_contracts import (
     OAuthDeviceTokenWrite,
     PollPayload,
     PollTooFastError,
+    RefreshTokenIssue,
     SlowDownDecision,
     StateNotFoundError,
     UnsupportedClientError,
@@ -121,6 +122,7 @@ class OAuthDeviceTokenIssuer(Protocol):
         client_id: str,
         device_label: str,
         lifetime: timedelta | None = None,
+        refresh: RefreshTokenIssue | None = None,
     ) -> IssuedOAuthToken: ...
 
     def issue_external_token(
