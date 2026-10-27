@@ -3275,6 +3275,11 @@ export const zPostOauthDeviceTokenBody = zDevicePollRequest
 export const zPostOauthDeviceTokenResponse = zDeviceTokenResponse
 
 /**
+ * Token revoked, or unknown to this client
+ */
+export const zPostOauthRevokeResponse = z.record(z.string(), z.unknown())
+
+/**
  * Access token
  */
 export const zPostOauthTokenResponse = zOAuthTokenResponse
