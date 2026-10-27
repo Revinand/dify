@@ -197,6 +197,34 @@ class OAuthDeviceSettings(Protocol):
     def sso_base_url(self) -> str | None: ...
 
 
+def build_account_poll_payload(
+    account: AccountSnapshot,
+    active_workspace_id: str,
+    workspaces: Sequence[DeviceWorkspace],
+    mint: IssuedOAuthToken,
+) -> PollPayload:
+    default_workspace_id = next(
+        (workspace.id for workspace in workspaces if workspace.id == active_workspace_id),
+        None,
+    )
+    if default_workspace_id is None:
+        default_workspace_id = next((workspace.id for workspace in workspaces if workspace.current), None)
+    if default_workspace_id is None and workspaces:
+        default_workspace_id = workspaces[0].id
+
+    return {
+        "token": mint.token,
+        "expires_at": mint.expires_at,
+        "subject_type": "account",
+        "account": {"id": account.id, "email": account.email, "name": account.name},
+        "workspaces": [
+            {"id": workspace.id, "name": workspace.name, "role": workspace.role} for workspace in workspaces
+        ],
+        "default_workspace_id": default_workspace_id,
+        "token_id": mint.token_id,
+    }
+
+
 class OAuthDeviceApplicationService:
     def __init__(
         self,
@@ -322,7 +350,7 @@ class OAuthDeviceApplicationService:
                 device_label=state.device_label,
             )
             try:
-                poll_payload = self._build_account_poll_payload(
+                poll_payload = build_account_poll_payload(
                     account,
                     context.active_workspace_id,
                     workspaces,
@@ -575,34 +603,6 @@ class OAuthDeviceApplicationService:
         if state.status is not DeviceFlowStatus.PENDING:
             raise AlreadyResolvedError
         return device_code, state
-
-    def _build_account_poll_payload(
-        self,
-        account: AccountSnapshot,
-        active_workspace_id: str,
-        workspaces: Sequence[DeviceWorkspace],
-        mint: IssuedOAuthToken,
-    ) -> PollPayload:
-        default_workspace_id = next(
-            (workspace.id for workspace in workspaces if workspace.id == active_workspace_id),
-            None,
-        )
-        if default_workspace_id is None:
-            default_workspace_id = next((workspace.id for workspace in workspaces if workspace.current), None)
-        if default_workspace_id is None and workspaces:
-            default_workspace_id = workspaces[0].id
-
-        return {
-            "token": mint.token,
-            "expires_at": mint.expires_at,
-            "subject_type": "account",
-            "account": {"id": account.id, "email": account.email, "name": account.name},
-            "workspaces": [
-                {"id": workspace.id, "name": workspace.name, "role": workspace.role} for workspace in workspaces
-            ],
-            "default_workspace_id": default_workspace_id,
-            "token_id": mint.token_id,
-        }
 
     def _rollback_issued_token(self, mint: IssuedOAuthToken) -> None:
         try:
