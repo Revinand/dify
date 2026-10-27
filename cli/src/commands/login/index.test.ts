@@ -285,3 +285,77 @@ it.each(['happy', 'denied', 'expired'] as const)(
     expect(existsSync(pendingPath)).toBe(false)
   },
 )
+
+async function loginWorld(...extra: string[]) {
+  const seed = await testContext({ login: false })
+  worlds.push(seed)
+  const w = await testContext({
+    login: false,
+    argv: [
+      'login',
+      '--server',
+      seed.mock.url,
+      '--no-browser',
+      '--no-keyring',
+      '--insecure',
+      ...extra,
+    ],
+    reuseDirOf: seed,
+  })
+  worlds.push(w)
+  return w
+}
+
+it('opens verification_uri_complete when the server sends it', async () => {
+  const w = await loginWorld()
+  expect(await (await w.ctx.get(commands)).run()).toBe(0)
+  expect(w.io.errBuf()).toContain(`open ${w.mock.url}/device?user_code=ABCD-1234`)
+})
+
+it('opens verification_uri when there is no complete one', async () => {
+  const w = await loginWorld()
+  w.mock.setScenario('legacy-token-route')
+  expect(await (await w.ctx.get(commands)).run()).toBe(0)
+  expect(w.io.errBuf()).toContain(`open ${w.mock.url}/device\n`)
+  expect(w.io.errBuf()).not.toContain('user_code=')
+})
+
+it.each(['legacy-token-route', 'legacy-token-route-html-404'] as const)(
+  'finishes a login against %s',
+  async (scenario) => {
+    const w = await loginWorld()
+    w.mock.setScenario(scenario)
+    expect(await (await w.ctx.get(commands)).run()).toBe(0)
+    expect(await (await w.ctx.get(token)).get()).toBe('dfoa_test')
+  },
+)
+
+it.each(['happy', 'legacy-token-route', 'legacy-token-route-html-404'] as const)(
+  '--no-wait then --resume works against %s',
+  async (scenario) => {
+    const start = await loginWorld('--no-wait')
+    start.mock.setScenario(scenario)
+    start.mock.setPendingPolls(1)
+    expect(await (await start.ctx.get(commands)).run()).toBe(0)
+    expect(JSON.parse(start.io.outBuf())).toMatchObject({ status: 'pending' })
+
+    const again = await testContext({
+      login: false,
+      argv: ['login', '--resume'],
+      reuseDirOf: start,
+    })
+    worlds.push(again)
+    expect(await (await again.ctx.get(commands)).run()).toBe(0)
+    expect(JSON.parse(again.io.outBuf())).toMatchObject({ status: 'pending' })
+
+    const done = await testContext({
+      login: false,
+      argv: ['login', '--resume'],
+      reuseDirOf: start,
+    })
+    worlds.push(done)
+    expect(await (await done.ctx.get(commands)).run()).toBe(0)
+    expect(JSON.parse(done.io.outBuf())).toMatchObject({ workspace_id: 'ws-1' })
+    expect(await (await done.ctx.get(token)).get()).toBe('dfoa_test')
+  },
+)
