@@ -162,6 +162,7 @@ from services.network_access_group_service import NetworkAccessGroupService
 from services.notification_gateway import BillingNotificationGateway
 from services.notification_service import NotificationService
 from services.oauth_authorize_service import OAuthAuthorizeService
+from services.oauth_client_registration import OAuthClientRegistrationService
 from services.oauth_clients import OAuthClientRegistry
 from services.oauth_device_adapters import (
     DifyConfigOAuthDeviceSettings,
@@ -321,6 +322,7 @@ class ApplicationServices:
     oauth_server: OAuthServerService
     oauth_device: OAuthDeviceApplicationService
     oauth_clients: OAuthClientRegistry
+    oauth_registration: OAuthClientRegistrationService
     oauth_token: OAuthTokenService
     oauth_authorize: OAuthAuthorizeService
     oauth_revocation: OAuthRevocationService
@@ -363,6 +365,7 @@ def _build_oauth_server_service(
 class _OAuthServices:
     device: OAuthDeviceApplicationService
     clients: OAuthClientRegistry
+    registration: OAuthClientRegistrationService
     token: OAuthTokenService
     authorize: OAuthAuthorizeService
     revocation: OAuthRevocationService
@@ -397,7 +400,8 @@ def _build_oauth_services(
         external_approval_limiter=RedisExternalApprovalLimiter(redis=redis),
         settings=DifyConfigOAuthDeviceSettings(),
     )
-    clients = OAuthClientRegistry(sources=[SQLAlchemyOAuthClientRepository(session_factory=database_client)])
+    client_repository = SQLAlchemyOAuthClientRepository(session_factory=database_client)
+    clients = OAuthClientRegistry(sources=[client_repository])
     codes = RedisAuthorizationCodeRepository(redis)
     settings = DifyConfigOAuthTokenSettings()
     refresh = SQLAlchemyOAuthRefreshTokenRepository(session_factory=database_client)
@@ -416,6 +420,7 @@ def _build_oauth_services(
     return _OAuthServices(
         device=device,
         clients=clients,
+        registration=OAuthClientRegistrationService(clients=client_repository),
         token=OAuthTokenService(handlers=handlers),
         authorize=OAuthAuthorizeService(clients=clients, codes=codes, settings=settings),
         revocation=OAuthRevocationService(clients=clients, grants=grants),
@@ -746,6 +751,7 @@ def build_application_services(
         oauth_server=oauth_server,
         oauth_device=oauth.device,
         oauth_clients=oauth.clients,
+        oauth_registration=oauth.registration,
         oauth_token=oauth.token,
         oauth_authorize=oauth.authorize,
         oauth_revocation=oauth.revocation,
