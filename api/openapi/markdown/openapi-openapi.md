@@ -2821,12 +2821,6 @@ is exact rather than an under-annotated open object.
 | ---- | ---- | ----------- | -------- |
 | hints | [ [Hint](#hint) ] | Next steps the caller can take | No |
 
-#### GrantType
-
-| Name | Type | Description | Required |
-| ---- | ---- | ----------- | -------- |
-| GrantType | string |  |  |
-
 #### HealthResponse
 
 Liveness payload for `GET /openapi/v1/_health` — no auth required.
@@ -3457,7 +3451,7 @@ RFC 7591 client metadata; unknown fields are ignored.
 | Name | Type | Description | Required |
 | ---- | ---- | ----------- | -------- |
 | client_name | string |  | No |
-| grant_types | [ [GrantType](#granttype) ] |  | No |
+| grant_types | [ string, <br>**Available values:** "authorization_code", "refresh_token" ] |  | No |
 | logo_uri | string |  | No |
 | redirect_uris | [ string ] |  | Yes |
 | response_types | [ string ] |  | No |
@@ -3472,7 +3466,7 @@ RFC 7591 client metadata; unknown fields are ignored.
 | client_name | string |  | Yes |
 | client_secret | string |  | No |
 | client_secret_expires_at | integer |  | No |
-| grant_types | [ [GrantType](#granttype) ] |  | Yes |
+| grant_types | [ string, <br>**Available values:** "authorization_code", "refresh_token" ] |  | Yes |
 | logo_uri | string |  | No |
 | redirect_uris | [ string ] |  | Yes |
 | response_types | [ string ] |  | Yes |

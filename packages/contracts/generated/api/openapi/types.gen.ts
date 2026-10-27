@@ -563,11 +563,6 @@ export type FormSubmitResponse = {
   hints?: Array<Hint>
 }
 
-export type GrantType =
-  | 'authorization_code'
-  | 'refresh_token'
-  | 'urn:ietf:params:oauth:grant-type:device_code'
-
 export type HealthResponse = {
   ok: boolean
 }
@@ -1087,10 +1082,10 @@ export type OAuthRegisterErrorResponse = {
 
 export type OAuthRegisterRequest = {
   client_name?: string | null
-  grant_types?: Array<GrantType> | null
+  grant_types?: Array<'authorization_code' | 'refresh_token'> | null
   logo_uri?: string | null
   redirect_uris: Array<string>
-  response_types?: Array<string> | null
+  response_types?: Array<'code'> | null
   token_endpoint_auth_method?: TokenEndpointAuthMethod | null
 }
 
@@ -1100,10 +1095,10 @@ export type OAuthRegisterResponse = {
   client_name: string
   client_secret?: string | null
   client_secret_expires_at?: number | null
-  grant_types: Array<GrantType>
+  grant_types: Array<'authorization_code' | 'refresh_token'>
   logo_uri?: string | null
   redirect_uris: Array<string>
-  response_types: Array<string>
+  response_types: Array<'code'>
   token_endpoint_auth_method: TokenEndpointAuthMethod
 }
 
